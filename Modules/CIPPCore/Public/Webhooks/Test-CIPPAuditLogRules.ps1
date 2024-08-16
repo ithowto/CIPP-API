@@ -4,9 +4,10 @@ function Test-CIPPAuditLogRules {
         [Parameter(Mandatory = $true)]
         $TenantFilter,
         [Parameter(Mandatory = $true)]
+        $ContentUri,
+        [Parameter(Mandatory = $true)]
         [ValidateSet('Audit.AzureActiveDirectory', 'Audit.Exchange')]
-        $LogType,
-        [switch]$ShowAll
+        $LogType
     )
 
     $Results = [PSCustomObject]@{
@@ -21,6 +22,7 @@ function Test-CIPPAuditLogRules {
         'OAuth2:Token'
         'SAS:EndAuth'
         'SAS:ProcessAuth'
+        'deviceAuth:ReprocessTls'
     )
 
     $TrustedIPTable = Get-CIPPTable -TableName 'trustedIps'
@@ -34,13 +36,12 @@ function Test-CIPPAuditLogRules {
             LogType    = $_.Type
         }
     }
-    $ContentBundleQuery = @{
+    $AuditLogQuery = @{
         TenantFilter = $TenantFilter
-        ContentType  = $LogType
-        ShowAll      = $ShowAll.IsPresent
+        ContentUri   = $ContentUri
     }
     Write-Information 'Getting data from Office 365 Management Activity API'
-    $Data = Get-CIPPAuditLogContentBundles @ContentBundleQuery | Get-CIPPAuditLogContent
+    $Data = Get-CIPPAuditLogContent @AuditLogQuery
     $LogCount = ($Data | Measure-Object).Count
     Write-Information "Logs to process: $LogCount"
     $Results.TotalLogs = $LogCount
@@ -51,11 +52,13 @@ function Test-CIPPAuditLogRules {
             try {
                 if ($Data.ExtendedProperties) {
                     $Data.CIPPExtendedProperties = ($Data.ExtendedProperties | ConvertTo-Json)
-                    if ($Data.CIPPExtendedProperties.RequestType -in $ExtendedPropertiesIgnoreList) {
-                        Write-Information 'No need to process this operation as its in our ignore list'
-                        continue
+                    $Data.ExtendedProperties | ForEach-Object {
+                        if ($_.Value -in $ExtendedPropertiesIgnoreList) {
+                            Write-Information 'No need to process this operation as its in our ignore list'
+                            continue
+                        }
+                        $Data | Add-Member -NotePropertyName $_.Name -NotePropertyValue $_.Value -Force -ErrorAction SilentlyContinue
                     }
-                    $Data.ExtendedProperties | ForEach-Object { $Data | Add-Member -NotePropertyName $_.Name -NotePropertyValue $_.Value -Force -ErrorAction SilentlyContinue }
                 }
                 if ($Data.DeviceProperties) {
                     $Data.CIPPDeviceProperties = ($Data.DeviceProperties | ConvertTo-Json)
