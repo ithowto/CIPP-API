@@ -10,7 +10,7 @@ Function Invoke-RemoveIntuneTemplate {
     [CmdletBinding()]
     param($Request, $TriggerMetadata)
 
-    $APIName = $TriggerMetadata.FunctionName
+    $APIName = $Request.Params.CIPPEndpoint
     $User = $request.headers.'x-ms-client-principal'
     Write-LogMessage -user $User -API $APINAME -message 'Accessed this API' -Sev 'Debug'
 
@@ -22,7 +22,7 @@ Function Invoke-RemoveIntuneTemplate {
         $Filter = "PartitionKey eq 'IntuneTemplate' and RowKey eq '$id'"
         Write-Host $Filter
         $ClearRow = Get-CIPPAzDataTableEntity @Table -Filter $Filter -Property PartitionKey, RowKey
-        Remove-AzDataTableEntity @Table -Entity $clearRow
+        Remove-AzDataTableEntity -Force @Table -Entity $clearRow
         Write-LogMessage -user $User -API $APINAME -message "Removed Intune Template with ID $ID." -Sev 'Info'
         $body = [pscustomobject]@{'Results' = 'Successfully removed Intune Template' }
     } catch {

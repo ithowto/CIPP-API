@@ -10,7 +10,7 @@ Function Invoke-RemoveStandard {
     [CmdletBinding()]
     param($Request, $TriggerMetadata)
 
-    $APIName = $TriggerMetadata.FunctionName
+    $APIName = $Request.Params.CIPPEndpoint
     $User = $request.headers.'x-ms-client-principal'
     Write-LogMessage -user $User -API $APINAME -message 'Accessed this API' -Sev 'Debug'
 
@@ -19,7 +19,7 @@ Function Invoke-RemoveStandard {
         $Table = Get-CippTable -tablename 'standards'
         $Filter = "PartitionKey eq 'standards' and RowKey eq '$id'"
         $ClearRow = Get-CIPPAzDataTableEntity @Table -Filter $Filter -Property PartitionKey, RowKey
-        Remove-AzDataTableEntity @Table -Entity $clearRow
+        Remove-AzDataTableEntity -Force @Table -Entity $clearRow
         Write-LogMessage -user $User -API $APINAME -message "Removed standards for $ID." -Sev 'Info'
         $body = [pscustomobject]@{'Results' = 'Successfully removed standards deployment' }
 

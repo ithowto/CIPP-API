@@ -10,7 +10,7 @@ Function Invoke-RemoveCAPolicy {
     [CmdletBinding()]
     param($Request, $TriggerMetadata)
 
-    $APIName = $TriggerMetadata.FunctionName
+    $APIName = $Request.Params.CIPPEndpoint
     $User = $request.headers.'x-ms-client-principal'
     Write-LogMessage -user $User -API $APINAME -message 'Accessed this API' -Sev 'Debug'
 
@@ -19,7 +19,7 @@ Function Invoke-RemoveCAPolicy {
     $policyId = $Request.Query.GUID
     if (!$policyId) { exit }
     try {
-        $null = New-GraphPostRequest -uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/$($policyId)" -type DELETE -tenant $TenantFilter
+        $null = New-GraphPostRequest -uri "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/$($policyId)" -type DELETE -tenant $TenantFilter -asapp $true
         Write-LogMessage -user $User -API $APINAME -message "Deleted CA Policy $policyId" -Sev 'Info' -tenant $TenantFilter
         $body = [pscustomobject]@{'Results' = 'Successfully deleted the policy' }
 
