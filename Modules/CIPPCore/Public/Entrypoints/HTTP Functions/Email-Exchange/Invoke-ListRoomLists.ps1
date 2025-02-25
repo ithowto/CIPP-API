@@ -1,6 +1,6 @@
 using namespace System.Net
 
-Function Invoke-ListRooms {
+Function Invoke-ListRoomLists {
     <#
     .FUNCTIONALITY
         Entrypoint
@@ -11,18 +11,14 @@ Function Invoke-ListRooms {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
-
-
-    # Write to the Azure Functions log stream.
-    Write-Host 'PowerShell HTTP trigger function processed a request.'
+    Write-LogMessage -headers $Request.Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
 
     # Interact with query parameters or the body of the request.
-    $TenantFilter = $Request.Query.TenantFilter
+    $TenantFilter = $Request.Query.tenantFilter
 
     try {
         $params = @{
-            uri      = 'https://graph.microsoft.com/beta/places/microsoft.graph.room'
+            uri      = 'https://graph.microsoft.com/beta/places/microsoft.graph.roomlist'
             tenantid = $TenantFilter
             AsApp    = $true
         }
