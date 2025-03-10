@@ -11,7 +11,8 @@ Function Invoke-AddIntuneTemplate {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
+    $Headers = $Request.Headers
+    Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
 
     $GUID = (New-Guid).GUID
     try {
@@ -41,7 +42,8 @@ Function Invoke-AddIntuneTemplate {
             $TenantFilter = $Request.Body.tenantFilter ?? $Request.Query.tenantFilter
             $URLName = $Request.Body.URLName ?? $Request.Query.URLName
             $ID = $Request.Body.ID ?? $Request.Query.ID
-            $Template = New-CIPPIntuneTemplate -TenantFilter $TenantFilter -URLName $URLName -ID $ID
+            $ODataType = $Request.Body.ODataType ?? $Request.Query.ODataType
+            $Template = New-CIPPIntuneTemplate -TenantFilter $TenantFilter -URLName $URLName -ID $ID -ODataType $ODataType
             Write-Host "Template: $Template"
             $object = [PSCustomObject]@{
                 Displayname = $Template.DisplayName
