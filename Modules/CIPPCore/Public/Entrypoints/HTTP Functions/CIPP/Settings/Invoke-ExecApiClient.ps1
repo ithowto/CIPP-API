@@ -13,7 +13,7 @@ function Invoke-ExecApiClient {
 
     switch ($Action) {
         'List' {
-            $Apps = Get-CIPPAzDataTableEntity @Table
+            $Apps = Get-CIPPAzDataTableEntity @Table | Where-Object { ![string]::IsNullOrEmpty($_.RowKey) }
             if (!$Apps) {
                 $Apps = @()
             } else {
@@ -31,6 +31,7 @@ function Invoke-ExecApiClient {
         'AddUpdate' {
             if ($Request.Body.ClientId -or $Request.Body.AppName) {
                 $ClientId = $Request.Body.ClientId.value ?? $Request.Body.ClientId
+                $AddUpdateSuccess = $false
                 try {
                     $ApiConfig = @{
                         Headers = $Request.Headers
@@ -46,44 +47,57 @@ function Invoke-ExecApiClient {
 
                     $ClientId = $APIConfig.ApplicationID
                     $AddedText = $APIConfig.Results
+                    $AddUpdateSuccess = $true
                 } catch {
-                    $AddedText = 'Could not modify App Registrations. Check the CIPP documentation for API requirements.'
+                    $AddedText = "Could not modify App Registrations. Check the CIPP documentation for API requirements. Error: $($_.Exception.Message)"
                     $Body = $Body | Select-Object * -ExcludeProperty CIPPAPI
                 }
             }
 
             if ($Request.Body.IpRange.value) {
-                $IpRange = @($Request.Body.IpRange.value)
+                $IpRange = [System.Collections.Generic.List[string]]::new()
+                $regexPattern = '^(?:(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?:/\d{1,2})?|(?:[0-9A-Fa-f]{1,4}:){1,7}[0-9A-Fa-f]{1,4}(?:/\d{1,3})?)$'
+                foreach ($IP in @($Request.Body.IPRange.value)) {
+                    if ($IP -match $regexPattern) {
+                        $IpRange.Add($IP)
+                    }
+                }
             } else {
                 $IpRange = @()
             }
 
-            $ExistingClient = Get-CIPPAzDataTableEntity @Table -Filter "RowKey eq '$($ClientId)'"
-            if ($ExistingClient) {
-                $Client = $ExistingClient
-                $Client.Role = [string]$Request.Body.Role.value
-                $Client.IPRange = "$(@($IpRange) | ConvertTo-Json -Compress)"
-                $Client.Enabled = $Request.Body.Enabled ?? $false
-                Write-LogMessage -headers $Request.Headers -API 'ExecApiClient' -message "Updated API client $($Request.Body.ClientId)" -Sev 'Info'
-                $Results = 'API client updated'
+            if (!$AddUpdateSuccess -and !$ClientId) {
+                $Body = @{
+                    Results = $AddedText
+                }
             } else {
-                $Client = @{
-                    'PartitionKey' = 'ApiClients'
-                    'RowKey'       = "$($ClientId)"
-                    'AppName'      = "$($APIConfig.AppName ?? $Request.Body.ClientId.addedFields.displayName)"
-                    'Role'         = [string]$Request.Body.Role.value
-                    'IPRange'      = "$(@($IpRange) | ConvertTo-Json -Compress)"
-                    'Enabled'      = $Request.Body.Enabled ?? $false
+                $ExistingClient = Get-CIPPAzDataTableEntity @Table -Filter "RowKey eq '$($ClientId)'"
+                if ($ExistingClient) {
+                    $Client = $ExistingClient
+                    $Client.Role = [string]$Request.Body.Role.value
+                    $Client.IPRange = "$(@($IpRange) | ConvertTo-Json -Compress)"
+                    $Client.Enabled = $Request.Body.Enabled ?? $false
+                    Write-LogMessage -headers $Request.Headers -API 'ExecApiClient' -message "Updated API client $($Request.Body.ClientId)" -Sev 'Info'
+                    $Results = 'API client updated'
+                } else {
+                    $Client = @{
+                        'PartitionKey' = 'ApiClients'
+                        'RowKey'       = "$($ClientId)"
+                        'AppName'      = "$($APIConfig.AppName ?? $Request.Body.ClientId.addedFields.displayName)"
+                        'Role'         = [string]$Request.Body.Role.value
+                        'IPRange'      = "$(@($IpRange) | ConvertTo-Json -Compress)"
+                        'Enabled'      = $Request.Body.Enabled ?? $false
+                    }
+                    $Results = @{
+                        resultText = "API Client created with the name '$($Client.AppName)'. Use the Copy to Clipboard button to retrieve the secret."
+                        copyField  = $APIConfig.ApplicationSecret
+                        state      = 'success'
+                    }
                 }
-                $Results = @{
-                    resultText = "API Client created with the name '$($Client.AppName)'. Use the Copy to Clipboard button to retrieve the secret."
-                    copyField  = $APIConfig.ApplicationSecret
-                    state      = 'success'
-                }
-            }
 
-            Add-CIPPAzDataTableEntity @Table -Entity $Client -Force | Out-Null
-            $Body = @($Results)
+                Add-CIPPAzDataTableEntity @Table -Entity $Client -Force | Out-Null
+                $Body = @($Results)
+            }
         }
         'GetAzureConfiguration' {
             $RGName = $ENV:WEBSITE_RESOURCE_GROUP
@@ -104,7 +118,7 @@ function Invoke-ExecApiClient {
             $TenantId = $ENV:TenantId
             $RGName = $ENV:WEBSITE_RESOURCE_GROUP
             $FunctionAppName = $ENV:WEBSITE_SITE_NAME
-            $AllClients = Get-CIPPAzDataTableEntity @Table -Filter 'Enabled eq true'
+            $AllClients = Get-CIPPAzDataTableEntity @Table -Filter 'Enabled eq true' | Where-Object { ![string]::IsNullOrEmpty($_.RowKey) }
             $ClientIds = $AllClients.RowKey
             try {
                 Set-CippApiAuth -RGName $RGName -FunctionAppName $FunctionAppName -TenantId $TenantId -ClientIds $ClientIds
@@ -146,10 +160,13 @@ function Invoke-ExecApiClient {
                     $ClientId = $Request.Body.ClientId.value ?? $Request.Body.ClientId
                     if ($Request.Body.RemoveAppReg -eq $true) {
                         Write-Information "Deleting API Client: $ClientId from Entra"
-                        $Apps = New-GraphGetRequest -uri "https://graph.microsoft.com/v1.0/applications?`$filter=signInAudience eq 'AzureAdMyOrg' and web/redirectUris/any(x:x eq 'https://$($sitename).azurewebsites.net/.auth/login/aad/callback')&`$top=999&`$select=id,appId&`$count=true" -NoAuthCheck $true -asapp $true -ComplexFilter
-                        $Id = $Apps | Where-Object { $_.appId -eq $ClientId } | Select-Object -ExpandProperty id
-                        if ($Id) {
-                            New-GraphPOSTRequest -uri "https://graph.microsoft.com/v1.0/applications/$Id" -Method DELETE -Body '{}' -NoAuthCheck $true -asapp $true
+                        $App = New-GraphGetRequest -uri "https://graph.microsoft.com/v1.0/applications?`$filter=appId eq '$($ClientId)'&`$select=id,appId,web" -NoAuthCheck $true -asapp $true
+                        $Id = $App.id
+                        if ($Id -and $App.web.redirectUris -like "*$($env:WEBSITE_SITE_NAME)*") {
+                            New-GraphPOSTRequest -uri "https://graph.microsoft.com/v1.0/applications/$Id" -type DELETE -Body '{}' -NoAuthCheck $true -asapp $true
+                            Write-Information "Deleted App Registration for $ClientId"
+                        } else {
+                            Write-Information "App Registration for $ClientId not found or Redirect URI does not match"
                         }
                     }
                     Write-Information "Deleting API Client: $ClientId from CIPP"
