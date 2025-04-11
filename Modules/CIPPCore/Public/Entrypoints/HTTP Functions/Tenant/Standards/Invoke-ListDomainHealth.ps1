@@ -3,7 +3,7 @@ using namespace System.Net
 Function Invoke-ListDomainHealth {
     <#
     .FUNCTIONALITY
-        Entrypoint
+        Entrypoint,AnyTenant
     .ROLE
         Tenant.DomainAnalyser.Read
     #>
@@ -34,7 +34,7 @@ Function Invoke-ListDomainHealth {
     }
 
     Set-DnsResolver -Resolver $Resolver
-
+    #UNDOREPLACE
     $UserCreds = ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($request.headers.'x-ms-client-principal')) | ConvertFrom-Json)
 
     $APIName = $Request.Params.CIPPEndpoint
