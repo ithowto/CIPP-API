@@ -3,7 +3,7 @@ using namespace System.Net
 Function Invoke-ListGraphExplorerPresets {
     <#
     .FUNCTIONALITY
-        Entrypoint
+        Entrypoint,AnyTenant
     .ROLE
         CIPP.Core.Read
     #>
@@ -11,8 +11,11 @@ Function Invoke-ListGraphExplorerPresets {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
-    $Username = ([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($request.headers.'x-ms-client-principal')) | ConvertFrom-Json).userDetails
+    $Headers = $Request.Headers
+    Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
+
+    # Interact with query parameters or the body of the request.
+    $Username = $Request.Headers['x-ms-client-principal-name']
 
     try {
         $Table = Get-CIPPTable -TableName 'GraphPresets'
