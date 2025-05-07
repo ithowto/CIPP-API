@@ -11,10 +11,11 @@ Function Invoke-ExecOneDriveShortCut {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
+    $Headers = $Request.Headers
+    Write-LogMessage -headers $Headers -API $APIName -message 'Accessed this API' -Sev 'Debug'
 
     Try {
-        $MessageResult = New-CIPPOneDriveShortCut -username $Request.Body.username -userid $Request.Body.userid -TenantFilter $Request.Body.tenantFilter -URL $Request.Body.siteUrl.value -ExecutingUser $request.headers.'x-ms-client-principal'
+        $MessageResult = New-CIPPOneDriveShortCut -username $Request.Body.username -userid $Request.Body.userid -TenantFilter $Request.Body.tenantFilter -URL $Request.Body.siteUrl.value -Headers $Request.Headers
         $Results = [pscustomobject]@{ 'Results' = "$MessageResult" }
     } catch {
         $Results = [pscustomobject]@{'Results' = "OneDrive Shortcut creation failed: $($_.Exception.Message)" }
