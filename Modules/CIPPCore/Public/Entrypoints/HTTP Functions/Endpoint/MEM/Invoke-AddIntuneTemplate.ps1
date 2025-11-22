@@ -1,9 +1,7 @@
-using namespace System.Net
-
 Function Invoke-AddIntuneTemplate {
     <#
     .FUNCTIONALITY
-        Entrypoint
+        Entrypoint,AnyTenant
     .ROLE
         Endpoint.MEM.ReadWrite
     #>
@@ -11,8 +9,6 @@ Function Invoke-AddIntuneTemplate {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    Write-LogMessage -headers $Request.Headers -API $APINAME -message 'Accessed this API' -Sev 'Debug'
-
     $GUID = (New-Guid).GUID
     try {
         if ($Request.Body.RawJSON) {
@@ -41,7 +37,8 @@ Function Invoke-AddIntuneTemplate {
             $TenantFilter = $Request.Body.tenantFilter ?? $Request.Query.tenantFilter
             $URLName = $Request.Body.URLName ?? $Request.Query.URLName
             $ID = $Request.Body.ID ?? $Request.Query.ID
-            $Template = New-CIPPIntuneTemplate -TenantFilter $TenantFilter -URLName $URLName -ID $ID
+            $ODataType = $Request.Body.ODataType ?? $Request.Query.ODataType
+            $Template = New-CIPPIntuneTemplate -TenantFilter $TenantFilter -URLName $URLName -ID $ID -ODataType $ODataType
             Write-Host "Template: $Template"
             $object = [PSCustomObject]@{
                 Displayname = $Template.DisplayName
@@ -67,8 +64,7 @@ Function Invoke-AddIntuneTemplate {
     }
 
 
-    # Associate values to output bindings by calling 'Push-OutputBinding'.
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+    return ([HttpResponseContext]@{
             StatusCode = [HttpStatusCode]::OK
             Body       = $body
         })

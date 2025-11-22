@@ -1,5 +1,3 @@
-using namespace System.Net
-
 Function Invoke-ExecDeviceDelete {
     <#
     .FUNCTIONALITY
@@ -11,29 +9,25 @@ Function Invoke-ExecDeviceDelete {
     param($Request, $TriggerMetadata)
 
     $APIName = $Request.Params.CIPPEndpoint
-    $ExecutingUser = $Request.headers.'x-ms-client-principal'
-    Write-LogMessage -user $ExecutingUser -API $APINAME -message 'Accessed this API' -Sev 'Debug'
+    $Headers = $Request.Headers
+
 
     # Interact with body parameters or the body of the request.
-    $TenantFilter = $Request.body.tenantFilter ?? $Request.Query.tenantFilter
-    $Action = $Request.body.action ?? $Request.Query.action
-    $DeviceID = $Request.body.ID ?? $Request.Query.ID
+    $TenantFilter = $Request.Body.tenantFilter ?? $Request.Query.tenantFilter
+    $Action = $Request.Body.action ?? $Request.Query.action
+    $DeviceID = $Request.Body.ID ?? $Request.Query.ID
 
     try {
-        $Results = Set-CIPPDeviceState -Action $Action -DeviceID $DeviceID -TenantFilter $TenantFilter -Headers $Request.Headers -APIName $APINAME
+        $Results = Set-CIPPDeviceState -Action $Action -DeviceID $DeviceID -TenantFilter $TenantFilter -Headers $Headers -APIName $APIName
         $StatusCode = [HttpStatusCode]::OK
     } catch {
         $Results = $_.Exception.Message
         $StatusCode = [HttpStatusCode]::BadRequest
     }
 
-    Write-Host $Results
-    $body = [pscustomobject]@{'Results' = "$Results" }
-
-    # Associate values to output bindings by calling 'Push-OutputBinding'.
-    Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
+    return ([HttpResponseContext]@{
             StatusCode = $StatusCode
-            Body       = $body
+            Body       = @{ 'Results' = $Results }
         })
 
 }
