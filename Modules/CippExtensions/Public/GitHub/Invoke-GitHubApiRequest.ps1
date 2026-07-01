@@ -12,14 +12,20 @@ function Invoke-GitHubApiRequest {
     )
 
     $Table = Get-CIPPTable -TableName Extensionsconfig
-    $Configuration = ((Get-CIPPAzDataTableEntity @Table).config | ConvertFrom-Json).GitHub
+    $ExtensionConfig = (Get-CIPPAzDataTableEntity @Table).config
+    if ($ExtensionConfig -and (Test-Json -Json $ExtensionConfig)) {
+        $Configuration = ($ExtensionConfig | ConvertFrom-Json).GitHub
+    } else {
+        $Configuration = @{ Enabled = $false }
+    }
 
     if ($Configuration.Enabled) {
         $APIKey = Get-ExtensionAPIKey -Extension 'GitHub'
         $Headers = @{
-            Authorization = "Bearer $($APIKey)"
-            'User-Agent'  = 'CIPP'
-            Accept        = $Accept
+            Authorization          = "Bearer $($APIKey)"
+            'User-Agent'           = 'CIPP'
+            Accept                 = $Accept
+            'X-GitHub-API-Version' = '2022-11-28'
         }
 
         $FullUri = "https://api.github.com/$Path"
@@ -34,13 +40,32 @@ function Invoke-GitHubApiRequest {
             $RestMethod.ResponseHeadersVariable = 'ResponseHeaders'
         }
 
-        $Response = Invoke-RestMethod @RestMethod
-        if ($ReturnHeaders.IsPresent) {
-            $ResponseHeaders
-        } else {
-            $Response
+        if ($Body) {
+            $RestMethod.Body = $Body | ConvertTo-Json -Depth 10
+            $RestMethod.ContentType = 'application/json'
+        }
+
+        try {
+            $Response = Invoke-RestMethod @RestMethod
+            if ($ReturnHeaders.IsPresent) {
+                $Response | Add-Member -MemberType NoteProperty -Name Headers -Value $ResponseHeaders
+                return $Response
+            } else {
+                return $Response
+            }
+        } catch {
+            throw $_.Exception.Message
         }
     } else {
-        throw 'GitHub API is not enabled'
+        $Action = @{
+            Action = 'ApiCall'
+            Path   = $Path
+            Method = $Method
+            Body   = $Body
+            Accept = $Accept
+        }
+        $Body = $Action | ConvertTo-Json -Depth 10
+
+        (Invoke-RestMethod -Uri 'https://cippy.azurewebsites.net/api/ExecGitHubAction' -Method POST -Body $Body -ContentType 'application/json').Results
     }
 }
